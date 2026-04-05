@@ -169,7 +169,9 @@ impl Scheduler {
 	}
 
 	pub fn plugin_entry(&self, plugin: SStr, args: HashMap<DataKey, Data>) {
-		let name = format!("Run micro plugin `{plugin}`");
+		self.behavior.reset();
+
+		let name = format!("Run plugin '{plugin}'");
 		let id = self.add::<PluginProgEntry, _>(name, |t| t.id);
 
 		self.plugin.submit(PluginInEntry(EntryJob { id, args, plugin }), NORMAL);

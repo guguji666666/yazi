@@ -18,9 +18,10 @@ function M:entry(job)
 		fail("No URL provided")
 	end
 
-	local pwd = ""
+	local pwd, target, retry = "", nil, false
 	while true do
-		if not M:try_with(from, pwd, to) then
+		target, retry = self:try_with(from, pwd, to)
+		if not retry then
 			break
 		elseif not job.args.noisy then
 			fail("'%s' is password-protected, please extract it individually and enter the password", from)
@@ -36,6 +37,10 @@ function M:entry(job)
 		else
 			break
 		end
+	end
+
+	if target then
+		ya.emit("tasks:update_succeed", { job.id, urls = { target }, track = true })
 	end
 end
 
@@ -59,14 +64,16 @@ function M:try_with(from, pwd, to)
 	local output, err = child:wait_with_output()
 	if output and output.status.code == 2 and archive.is_encrypted(output.stderr) then
 		fs.remove("dir_all", tmp)
-		return true -- Need to retry
+		return nil, true -- Need to retry
 	end
 
-	self:tidy(from, to, tmp)
+	local target = self:tidy(from, to, tmp)
 	if not output then
 		fail("7zip failed to output when extracting '%s', error: %s", from, err)
 	elseif output.status.code ~= 0 then
 		fail("7zip exited with error code %s when extracting '%s':\n%s", output.status.code, from, output.stderr)
+	else
+		return target, false
 	end
 end
 
@@ -98,7 +105,9 @@ function M:tidy(from, to, tmp)
 	elseif not only and not fs.rename(tmp, target) then
 		fail('Failed to move "%s" to "%s"', tmp, target)
 	end
+
 	fs.remove("dir", tmp)
+	return target
 end
 
 function M.tmp_name(url) return ".tmp_" .. ya.hash(string.format("extract//%s//%.10f", url, ya.time())) end
